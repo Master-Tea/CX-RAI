@@ -1,0 +1,16 @@
+﻿name: Release index
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify documented download and candidate status
+        run: |
+          test -s README.md
+          grep -q 'releases/latest' README.md
+          grep -q 'GPT 6.1 Sol' README.md
+          curl --fail --location --retry 3 --output /dev/null https://github.com/Master-Tea/CX-RAI/releases/latest
