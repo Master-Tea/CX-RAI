@@ -1,0 +1,90 @@
+name: Microsoft Store direct downloads
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the verified installer (enable Pages / GitHub Actions first)
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-download-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download and verify the immutable 1.8.3 release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site/downloads/1.8.3
+          file=_site/downloads/1.8.3/CX.RAI_1.8.3_Setup.exe
+          curl --fail --location --retry 3 --max-time 600 \
+            --output "$file" \
+            'https://github.com/Master-Tea/CX-RAI/releases/download/v1.8.3/CX.RAI_1.8.3_Setup.exe'
+          echo "eeb3332e8fc6b3ef30d45de56db379ef9cf7ab19526372efa1b135676b5a8b44  $file" | sha256sum --check
+          test "$(stat --format=%s "$file")" = 112985496
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>CX RAI Windows installer</title>
+          <main><h1>CX RAI Windows installer</h1>
+          <p>Official versioned installer for Windows x86 and x64, version 1.8.3.</p>
+          <p><a href="downloads/1.8.3/CX.RAI_1.8.3_Setup.exe">Download CX RAI 1.8.3 Setup.exe</a></p>
+          <p>SHA-256: <code>eeb3332e8fc6b3ef30d45de56db379ef9cf7ab19526372efa1b135676b5a8b44</code></p>
+          <p><a href="installer-return-codes.html">Silent installer return codes</a></p>
+          <p><a href="https://github.com/Master-Tea/CX-RAI/releases/tag/v1.8.3">Release information</a></p></main></html>
+          HTML
+          cat > _site/installer-return-codes.html <<'HTML'
+          <!doctype html>
+          <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>CX RAI 1.8.3 installer return codes</title>
+          <main><h1>CX RAI 1.8.3 installer return codes</h1>
+          <p>Silent installation: <code>CX.RAI_1.8.3_Setup.exe --silent</code></p>
+          <ul><li><code>0</code>: installation completed successfully, including a successful update or reinstallation.</li>
+          <li><code>1</code>: generic installation failure. A setup exception occurred; inspect the installer failure log for the underlying cause.</li></ul>
+          <p>The 1.8.3 EXE does not expose distinct process exit codes for cancellation, an already-installed application, installation contention, insufficient disk space, reboot required, network failures, or security-policy rejection.</p>
+          <p>Nested AppX HRESULTs and Windows Installer/MSI codes are not the EXE process exit codes.</p></main></html>
+          HTML
+      - name: Upload verified Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+          retention-days: 1
+
+  deploy:
+    if: ${{ inputs.deploy }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+      - name: Verify direct download without redirects
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="$RUNNER_TEMP/CX.RAI_1.8.3_Setup.exe"
+          url="${SITE_URL%/}/downloads/1.8.3/CX.RAI_1.8.3_Setup.exe"
+          result=$(curl --fail --silent --show-error --retry 6 --retry-delay 10 --max-time 600 \
+            --output "$file" --write-out '%{http_code}' "$url")
+          test "$result" = 200
+          echo "eeb3332e8fc6b3ef30d45de56db379ef9cf7ab19526372efa1b135676b5a8b44  $file" | sha256sum --check
+          printf 'Verified direct installer URL: %s\n' "$url" >> "$GITHUB_STEP_SUMMARY"
