@@ -1,5 +1,10 @@
 ﻿# CX RAI
 
+<a href="https://get.microsoft.com/installer/download/xpdc6f1c8pjbl2?referrer=appbadge" target="_self">
+  <img src="https://get.microsoft.com/images/zh-cn%20dark.svg" width="200" alt="从 Microsoft Store 获取 CX RAI" />
+</a>
+
+
 CX RAI UWP 客户端。
 
 ## 下载
